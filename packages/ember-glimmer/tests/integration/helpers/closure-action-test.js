@@ -998,7 +998,7 @@ moduleFor('Helpers test: closure {{action}}', class extends RenderingTest {
 
     this.registerComponent('middle-component', {
       ComponentClass: MiddleComponent,
-      template: `{{inner-component submit=attrs.submit}}`
+      template: `{{inner-component submit=@submit}}`
     });
 
     this.registerComponent('outer-component', {
