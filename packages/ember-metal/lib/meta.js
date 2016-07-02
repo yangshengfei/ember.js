@@ -342,19 +342,80 @@ if (isEnabled('mandatory-setter')) {
   };
 }
 
-// choose the one appropriate for given platform
-let setMeta = function(obj, meta) {
-  // if `null` already, just set it to the new value
-  // otherwise define property first
-  if (obj[META_FIELD] !== null) {
-    if (obj.__defineNonEnumerable) {
-      obj.__defineNonEnumerable(EMBER_META_PROPERTY);
-    } else {
-      Object.defineProperty(obj, META_FIELD, META_DESC);
-    }
-  }
+const HAS_NATIVE_WEAKMAP = (function() {
+  // detect if `WeakMap` is even present
+  let hasWeakMap = typeof WeakMap === 'function';
+  if (!hasWeakMap) { return false; }
 
-  obj[META_FIELD] = meta;
+  let instance = new WeakMap();
+  // use `Object`'s `.toString` directly to prevent us from detecting
+  // polyfills as native weakmaps
+  return Object.prototype.toString.call(instance) === '[object WeakMap]';
+})();
+
+let setMeta, peekMeta, deleteMeta;
+
+// choose the one appropriate for given platform
+if (HAS_NATIVE_WEAKMAP) {
+  let getPrototypeOf = Object.getPrototypeOf;
+  let metaStore = new WeakMap();
+
+  setMeta = function WeakMap_setMeta(obj, meta) {
+    metaStore.set(obj, meta);
+  };
+
+  peekMeta = function WeakMap_peekMeta(obj) {
+    let pointer = obj;
+    let meta;
+    while (pointer) {
+      meta = metaStore.get(pointer);
+      // stop if we find a `null` value, since
+      // that means the meta was deleted
+      // any other truthy value is a "real" meta
+      if (meta === null || meta) {
+        return meta;
+      }
+
+      pointer = getPrototypeOf(pointer);
+    }
+  };
+
+  deleteMeta = function WeakMap_deleteMeta(obj) {
+    // set value to `null` so that we can detect
+    // a deleted meta in peekMeta later
+    metaStore.set(obj, null);
+  };
+} else {
+  setMeta = function Fallback_setMeta(obj, meta) {
+    // if `null` already, just set it to the new value
+    // otherwise define property first
+    if (obj[META_FIELD] !== null) {
+      if (obj.__defineNonEnumerable) {
+        obj.__defineNonEnumerable(EMBER_META_PROPERTY);
+      } else {
+        Object.defineProperty(obj, META_FIELD, META_DESC);
+      }
+    }
+
+    obj[META_FIELD] = meta;
+  };
+
+  peekMeta = function Fallback_peekMeta(obj) {
+    return obj[META_FIELD];
+  };
+
+  deleteMeta = function Fallback_deleteMeta(obj) {
+    if (typeof obj[META_FIELD] !== 'object') {
+      return;
+    }
+    obj[META_FIELD] = null;
+  };
+}
+
+export {
+  peekMeta,
+  setMeta,
+  deleteMeta
 };
 
 /**
@@ -390,15 +451,4 @@ export function meta(obj) {
   let newMeta = new Meta(obj, parent);
   setMeta(obj, newMeta);
   return newMeta;
-}
-
-export function peekMeta(obj) {
-  return obj[META_FIELD];
-}
-
-export function deleteMeta(obj) {
-  if (typeof obj[META_FIELD] !== 'object') {
-    return;
-  }
-  obj[META_FIELD] = null;
 }
