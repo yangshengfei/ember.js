@@ -2,6 +2,10 @@
 // Remove "use strict"; from transpiled module until
 // https://bugs.webkit.org/show_bug.cgi?id=138038 is fixed
 
+import {
+  functionMetaFor
+} from 'ember-metal/function-meta';
+
 /**
 @module ember-metal
 */
@@ -263,14 +267,25 @@ export const checkHasSuper = (function () {
   };
 }());
 
-function ROOT() {}
-ROOT.__hasSuper = false;
+export const ROOT = (function() {
+  function TERMINAL_SUPER_ROOT() {}
 
-function hasSuper(func) {
-  if (func.__hasSuper === undefined) {
-    func.__hasSuper = checkHasSuper(func);
+  // create meta for the terminal root
+  let meta = functionMetaFor(TERMINAL_SUPER_ROOT);
+  meta.writeHasSuper(false);
+
+  return TERMINAL_SUPER_ROOT;
+})();
+
+function hasSuper(func, meta) {
+  let hasSuper = meta.peekHasSuper();
+
+  if (hasSuper === undefined) {
+    hasSuper = checkHasSuper(func);
+    meta.writeHasSuper(hasSuper);
   }
-  return func.__hasSuper;
+
+  return hasSuper;
 }
 
 /**
@@ -286,13 +301,18 @@ function hasSuper(func) {
   @return {Function} wrapped function.
 */
 export function wrap(func, superFunc) {
-  if (!hasSuper(func)) {
+  let funcMeta = functionMetaFor(func);
+  if (!hasSuper(func, funcMeta)) {
     return func;
   }
+
+  let superFuncMeta = functionMetaFor(superFunc);
   // ensure an unwrapped super that calls _super is wrapped with a terminal _super
-  if (!superFunc.wrappedFunction && hasSuper(superFunc)) {
-    return _wrap(func, _wrap(superFunc, ROOT));
+  if (!superFuncMeta.wrappedFunction && hasSuper(superFunc, superFuncMeta)) {
+    let wrappedSuperFunc = _wrap(superFunc, ROOT);
+    return _wrap(func, wrappedSuperFunc);
   }
+
   return _wrap(func, superFunc);
 }
 
@@ -305,10 +325,8 @@ function _wrap(func, superFunc) {
     return ret;
   }
 
-  superWrapper.wrappedFunction = func;
-  superWrapper.__ember_observes__ = func.__ember_observes__;
-  superWrapper.__ember_observesBefore__ = func.__ember_observesBefore__;
-  superWrapper.__ember_listens__ = func.__ember_listens__;
+  // setup the super wrapped functions meta
+  functionMetaFor(superWrapper, func);
 
   return superWrapper;
 }

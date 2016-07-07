@@ -13,6 +13,9 @@ import { deprecate } from 'ember-metal/debug';
 
 import { ONCE, SUSPENDED } from 'ember-metal/meta_listeners';
 
+import {
+  functionMetaFor
+} from 'ember-metal/function-meta';
 
 /*
   The event system uses a series of nested hashes to store listeners on an
@@ -304,6 +307,9 @@ export function listenersFor(obj, eventName) {
 export function on(...args) {
   let func = args.pop();
   let events = args;
-  func.__ember_listens__ = events;
+
+  let meta = functionMetaFor(func);
+  meta.writeListeners(events);
+
   return func;
 }

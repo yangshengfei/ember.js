@@ -8,7 +8,10 @@ import { assert, deprecateFunc } from 'ember-metal/debug';
 import { computed } from 'ember-metal/computed';
 import { observer } from 'ember-metal/mixin';
 
-const a_slice = Array.prototype.slice;
+import {
+  functionMetaFor
+} from 'ember-metal/function-meta';
+
 const FunctionPrototype = Function.prototype;
 
 if (ENV.EXTEND_PROTOTYPES.Function) {
@@ -181,9 +184,9 @@ if (ENV.EXTEND_PROTOTYPES.Function) {
     @for Function
     @public
   */
-  FunctionPrototype.on = function () {
-    let events = a_slice.call(arguments);
-    this.__ember_listens__ = events;
+  FunctionPrototype.on = function (...events) {
+    let meta = functionMetaFor(this);
+    meta.writeListeners(events);
 
     return this;
   };
